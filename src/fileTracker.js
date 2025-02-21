@@ -3,14 +3,20 @@ import fs from 'fs';
 
 export default class fileTracker {
   #folderTrackers = [];
+  #exludedFoldersList = [];
   constructor() {
   }
 
   async setWatchList(_folders) {
     this.#folderTrackers = _folders.map(r => new FolderTracker(r, this));
   }
+  setExcludeList(_folders) {
+    this.#exludedFoldersList = _folders;
+  }
+  _isPathInIgnoreFolder(_path) {
+    return !!this.#exludedFoldersList.find(r => _path.includes(r));
+  }
 }
-
 
 
 class FolderTracker {
@@ -25,7 +31,7 @@ class FolderTracker {
     
     fs.watch(this.folderPath, {recursive: true}, async (eventType, relativePath) => {
       let fullPath = this.folderPath + '/' + relativePath;
-      if (relativePath.includes('.DS_Store')) return;
+      if (relativePath.includes('.DS_Store') || _parent._isPathInIgnoreFolder(fullPath)) return;
 
       // if (eventType !== 'change') return;
       switch (eventType)

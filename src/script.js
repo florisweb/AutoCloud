@@ -20,6 +20,7 @@ const FileTracker = new fileTracker();
     // await Server.setup();
     await TagManager.setup();
     await FileTracker.setWatchList(TagManager.foldersToSync);
+    FileTracker.setExcludeList(TagManager.foldersToIgnore);
 
     // let curChangePromise;
     // for (let watchedFolder of TagManager.foldersToSync) 

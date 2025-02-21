@@ -6,9 +6,11 @@ export default class tagManager {
  
 
     foldersToSync = [];
+    foldersToIgnore = [];
     async setup() {
         this.foldersToSync = await this.#getFilesWithTag(this.#SyncTagName);
-        console.log('TagManager: folders to sync:', this.foldersToSync);
+        this.foldersToIgnore = await this.#getFilesWithTag(this.#NoSyncTagName);
+        console.log('TagManager: folders to sync:', this.foldersToSync, 'ignore', this.foldersToIgnore);
     }
 
     async #getFilesWithTag(_tag) {

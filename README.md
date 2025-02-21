@@ -1,7 +1,7 @@
 # AutoCloud
 A simple file-syncing service.
 
-
+NOTE: MACOS ONLY
 
 
 ## Config (src/config.json)
@@ -14,10 +14,5 @@ A simple file-syncing service.
 	    "password": "-",
 
 	    "remoteFolder": "-"
-	  },
-	  "local": {
-	    "watchedFolders": [
-	      "-"
-	    ]
 	  }
 	}

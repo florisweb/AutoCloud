@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "fs": "^0.0.1-security",
+    "ssh2-sftp-client": "^11.0.0"
+  }
+}

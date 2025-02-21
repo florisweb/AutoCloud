@@ -8,6 +8,7 @@ export default class tagManager {
     foldersToSync = [];
     async setup() {
         this.foldersToSync = await this.#getFilesWithTag(this.#SyncTagName);
+        console.log('TagManager: folders to sync:', this.foldersToSync);
     }
 
     async #getFilesWithTag(_tag) {

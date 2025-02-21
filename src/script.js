@@ -1,6 +1,7 @@
 import fs from 'fs';
 import FileServer from './fileServer.js';
 import tagManager from './tagManager.js';
+import fileTracker from './fileTracker.js';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -13,31 +14,33 @@ export function getCurDir() {
 const Config = JSON.parse(fs.readFileSync('./config.json'));
 const Server = new FileServer(Config);
 const TagManager = new tagManager();
+const FileTracker = new fileTracker();
 
 (async () => {
-    await Server.setup();
+    // await Server.setup();
     await TagManager.setup();
+    await FileTracker.setWatchList(TagManager.foldersToSync);
 
-    let curChangePromise;
-    for (let watchedFolder of TagManager.foldersToSync) 
-    {
-        console.log('Watching ' + watchedFolder);
-        fs.watch(watchedFolder, {recursive: true}, async (eventType, relativePath) => {
-            console.log('change', eventType, relativePath);
-            if (!Server.isConnected) return;
-            if (eventType !== 'change') return;
+    // let curChangePromise;
+    // for (let watchedFolder of TagManager.foldersToSync) 
+    // {
+    //     console.log('Watching ' + watchedFolder);
+    //     fs.watch(watchedFolder, {recursive: true}, async (eventType, relativePath) => {
+    //         console.log('change', eventType, relativePath);
+    //         if (!Server.isConnected) return;
+    //         if (eventType !== 'change') return;
 
-            while (curChangePromise) await curChangePromise;
-            if (fs.existsSync(watchedFolder + '/' + relativePath))
-            {
-                curChangePromise = Server.uploadFile(relativePath, watchedFolder);
-            } else {
-                curChangePromise = Server.deleteFile(relativePath, watchedFolder);
-            }
-            await curChangePromise;
-            curChangePromise = false;
-        });
-    }
+    //         while (curChangePromise) await curChangePromise;
+    //         if (fs.existsSync(watchedFolder + '/' + relativePath))
+    //         {
+    //             curChangePromise = Server.uploadFile(relativePath, watchedFolder);
+    //         } else {
+    //             curChangePromise = Server.deleteFile(relativePath, watchedFolder);
+    //         }
+    //         await curChangePromise;
+    //         curChangePromise = false;
+    //     });
+    // }
 
 
 })();

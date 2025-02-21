@@ -4,7 +4,8 @@ A simple file-syncing service.
 
 
 
-src/config.json
+## Config (src/config.json)
+
 	{
 	  "server": {
 	    "port": -,

@@ -16,3 +16,9 @@ NOTE: MACOS ONLY
 	    "remoteFolder": "-"
 	  }
 	}
+
+
+Issues:
+
+- doesn't do symlinks
+- filename may not contain /?

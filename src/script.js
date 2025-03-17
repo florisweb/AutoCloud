@@ -1,7 +1,7 @@
 import fs from 'fs';
 import FileServer from './fileServer.js';
 import tagManager from './tagManager.js';
-import fileTracker from './fileTracker.js';
+import fileIndexer from './fileIndexer.js';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -14,37 +14,41 @@ export function getCurDir() {
 const Config = JSON.parse(fs.readFileSync('./config.json'));
 const Server = new FileServer(Config);
 const TagManager = new tagManager();
-const FileTracker = new fileTracker();
+const FileIndexer = new fileIndexer();
 
+
+let phantomDataMap = [{}];
 (async () => {
-    // await Server.setup();
+    await Server.setup();
     await TagManager.setup();
-    await FileTracker.setWatchList(TagManager.foldersToSync);
-    FileTracker.setExcludeList(TagManager.foldersToIgnore);
+    FileIndexer.setExcludeList(TagManager.foldersToIgnore);
+    FileIndexer.setWatchList(TagManager.foldersToSync)
 
-    // let curChangePromise;
-    // for (let watchedFolder of TagManager.foldersToSync) 
-    // {
-    //     console.log('Watching ' + watchedFolder);
-    //     fs.watch(watchedFolder, {recursive: true}, async (eventType, relativePath) => {
-    //         console.log('change', eventType, relativePath);
-    //         if (!Server.isConnected) return;
-    //         if (eventType !== 'change') return;
-
-    //         while (curChangePromise) await curChangePromise;
-    //         if (fs.existsSync(watchedFolder + '/' + relativePath))
-    //         {
-    //             curChangePromise = Server.uploadFile(relativePath, watchedFolder);
-    //         } else {
-    //             curChangePromise = Server.deleteFile(relativePath, watchedFolder);
-    //         }
-    //         await curChangePromise;
-    //         curChangePromise = false;
-    //     });
-    // }
-
-
+    let remoteMap = await Server.generateIndex();
+    let localMap = await FileIndexer.folderTrackers[0].generateIndex();
+    console.log(remoteMap.print(), localMap.print(), localMap.difference(remoteMap));
+    // setTimeout(sync, 5000);
 })();
+
+
+async function sync() {
+    let trackers = FileIndexer.folderTrackers;
+    for (let tracker of trackers)
+    {
+        let foldersToBeUpdated = tracker.listFoldersToBeUpdated();
+        console.log(foldersToBeUpdated);
+        for (let folder of foldersToBeUpdated)
+        {
+            console.log('going to upload folder:', folder);
+            await Server.uploadFolder(folder, tracker.folderPath);
+        }
+    }
+
+    // if (!foldersToBeUpdated.length) return;
+    await FileIndexer.updateIndex();
+    setTimeout(sync, 5000);
+}
+
 
 async function wait(_ms) {
     return new Promise((resolve) => setTimeout(resolve, _ms));

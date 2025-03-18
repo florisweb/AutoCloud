@@ -47,6 +47,22 @@ export default class FolderIndex {
     return curFolder;
   }
 
+  removePath(_path) { // Path obj
+    let localPath = this.#pathToLocalPath(_path);
+    let parts = localPath.split('/').filter(p => !!p);
+    let parentParts = Object.assign([], parts).splice(0, parts.length - 1);
+
+    let parentFolder = this.#index;
+    for (let part of parentParts)
+    {
+      if (!parentFolder.contents[part]) return false;
+      parentFolder = parentFolder.contents[part];
+    }
+
+    delete parentFolder.contents[parts[parts.length - 1]];
+    return true;
+  }
+
   difference(_folderIndex, _changedPerspective = false) {
     let missingPaths = [];
 
@@ -55,6 +71,7 @@ export default class FolderIndex {
       {
         let curPath = _curPath + '/' + key;
         let found = Object.keys(_indexB.contents).includes(key);
+        console.log('search', curPath, _indexB.contents);
         if (!found)
         {
           missingPaths.push(curPath);
@@ -147,6 +164,5 @@ export default class FolderIndex {
         `}`
       ];
     }
-
   }
 }

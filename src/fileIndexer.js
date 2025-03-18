@@ -5,8 +5,6 @@ import FolderIndex from './folderIndex.js';
 export default class fileIndexer {
   #folderTrackers = [];
   #exludedFoldersList = [];
-  constructor() {
-  }
 
   get folderTrackers() {
     return this.#folderTrackers;
@@ -20,6 +18,10 @@ export default class fileIndexer {
     let folders = []
     this.#folderTrackers.forEach(r => folders = folders.concat(r.listFoldersToBeUpdated()));
     return folders;
+  }
+
+  async setup() {
+    await Promise.all(this.#folderTrackers.map(r => r.setup()))
   }
 
   async setWatchList(_folders) {
@@ -58,7 +60,7 @@ class FolderIndexer {
     this.folderPath = _folder;
     this.#parent = _parent;
 
-    this.generateIndex().then(index => this.index = index);
+    
 
 
     // fs.watch(this.folderPath, {recursive: true}, async (eventType, relativePath) => {
@@ -72,6 +74,10 @@ class FolderIndexer {
     //   console.log(fullPath, eventType);
     // });
 
+  }
+
+  async setup() {
+    this.index = await this.generateIndex();
   }
   // #markPathForUpdate(_path) {
   //   let localParts = _path.split(this.folderPath)[1].split('/').filter(r => !!r);

@@ -66,7 +66,12 @@ async function syncFolder(_tracker) {
     for (let missingPath of differences.extraPaths)
     {
         try {
-            await Server.removeFile(missingPath);
+            if (await Server.isFolder(missingPath))
+            {
+                await Server.removeFolder(missingPath);
+            } else {
+                await Server.removeFile(missingPath);
+            }
         } catch(e) {
             console.log('Could not remove', missingPath, e);
         }     

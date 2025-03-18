@@ -71,7 +71,7 @@ export default class FolderIndex {
       {
         let curPath = _curPath + '/' + key;
         let found = Object.keys(_indexB.contents).includes(key);
-        console.log('search', curPath, _indexB.contents);
+
         if (!found)
         {
           missingPaths.push(curPath);

@@ -29,8 +29,7 @@ export default class FileServer {
       return;
     }
     this.#isSetup = true;
-
-    // this.generateIndex().then(index => {this.index = index; console.log(this.index.print())});
+    this.index = await this.generateIndex();
   }
 
   async stop() {
@@ -84,11 +83,15 @@ export default class FileServer {
     let targetPath = this.#config.server.remoteFolder + '/' + localName;
     let parts = targetPath.split('/');
     let pathPath = parts.splice(0, parts.length - 1).join('/');
+    let stat = fs.lstatSync(fullPath);
     
     try {
       let exists = await this.client.exists(pathPath);
       if (!exists) await this.client.mkdir(pathPath, true);
-      return await this.client.put(fullPath, targetPath);
+      return this.client.put(fullPath, targetPath).then(() => {
+        // Success: update index
+        this.index.addFile(localName, stat.size);
+      });
     } catch (e) {
       console.log('! [FS] Error while uploading:', _name, e)
       return false;
@@ -109,13 +112,32 @@ export default class FileServer {
 
 
 
-   async removeFile(_name, _watchedFolder) {
-    let targetPath = this.#config.server.remoteFolder + '/' + _name;
-    // let parts = targetPath.split('/');
-    // let pathPath = parts.splice(0, parts.length - 1).join('/');
+  async isFolder(_name) {
+    let parts = _name.split('/');
+    let sanitizedPath = parts.filter(r => !!r).join('/');
+    let targetPath = this.#config.server.remoteFolder + '/' + sanitizedPath;
+    let stat = await this.client.stat(targetPath);
+    return stat.isDirectory;
+  }
+
+  async removeFile(_name) {
+    let parts = _name.split('/');
+    let sanitizedPath = parts.filter(r => !!r).join('/');
+    let targetPath = this.#config.server.remoteFolder + '/' + sanitizedPath;
     
-    // let exists = await this.client.client.exists(pathPath);
-    return await this.client.delete(targetPath);
+    return this.client.delete(targetPath).then(() => {
+      this.index.removePath(sanitizedPath);
+    });
+  }
+
+  async removeFolder(_name) {
+    let parts = _name.split('/');
+    let sanitizedPath = parts.filter(r => !!r).join('/');
+    let targetPath = this.#config.server.remoteFolder + '/' + sanitizedPath;
+    
+    return this.client.rmdir(targetPath, true).then(() => {
+      this.index.removePath(sanitizedPath);
+    });
   }
 
 

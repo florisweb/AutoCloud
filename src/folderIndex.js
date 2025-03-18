@@ -18,6 +18,13 @@ export default class FolderIndex {
   }
 
 
+
+  markPathForUpdate(_path) {
+    let folder = this.getFolderFromPath(_path)
+    if (!folder) return false;
+    folder.needsUpdate = true;
+  }
+
   addFile(_path, _size) { // Path obj
     let localPath = this.#pathToLocalPath(_path);
     let parts = localPath.split('/').filter(p => !!p);
@@ -111,7 +118,7 @@ export default class FolderIndex {
 
 
 
-  #getFolderFromPath(_path) {
+  getFolderFromPath(_path) {
     let localPath = this.#pathToLocalPath(_path);
     let parts = localPath.split('/').splice(1, Infinity);
     

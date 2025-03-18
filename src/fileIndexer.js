@@ -60,53 +60,60 @@ class FolderIndexer {
     this.folderPath = _folder;
     this.#parent = _parent;
 
-    
+    fs.watch(this.folderPath, {recursive: true}, async (eventType, relativePath) => {
+      let fullPath = this.folderPath + '/' + relativePath;
+      if (relativePath.includes('.DS_Store') || _parent._isPathInIgnoreFolder(fullPath)) return;
 
+      let parts = fullPath.split('/');
+      let containingFolderPath = parts.splice(0, parts.length - 1).join('/');
 
-    // fs.watch(this.folderPath, {recursive: true}, async (eventType, relativePath) => {
-    //   let fullPath = this.folderPath + '/' + relativePath;
-    //   if (relativePath.includes('.DS_Store') || _parent._isPathInIgnoreFolder(fullPath)) return;
-
-    //   let parts = fullPath.split('/');
-    //   let containingFolderPath = parts.splice(0, parts.length - 1).join('/');
-
-    //   this.#markPathForUpdate(containingFolderPath);
-    //   console.log(fullPath, eventType);
-    // });
-
+      this.index.markPathForUpdate(containingFolderPath);
+    });
   }
 
   async setup() {
     this.index = await this.generateIndex();
   }
-  // #markPathForUpdate(_path) {
-  //   let localParts = _path.split(this.folderPath)[1].split('/').filter(r => !!r);
-  //   let curFolder = this.index;
-  //   for (let part of localParts)
-  //   {
-  //     if (!curFolder.contents[part]) continue; // Skip: automatically set needsUpdate to deepest known folder
-  //     curFolder = curFolder.contents[part];
-  //   }
-  //   curFolder.needsUpdate = true;
-  // }
 
-  // #getFolderFromPath(_path) {
-  //   let parts = _path.split(this.folderPath);
-  //   let localParts = parts.length === 1 ? parts[0] : parts[1].split('/').filter(r => !!r);
-    
-  //   let curFolder = this.index;
-  //   for (let part of localParts)
-  //   {
-  //     if (!curFolder.contents[part]) return false;
-  //     curFolder = curFolder.contents[part];
-  //   }
-  //   return curFolder;
-  // }
 
-  // async updateIndex(_force = false) {
-  //   this.#recursiveUpdateFolder(this.folderPath);
-  //   console.log('to be updated', this.listFoldersToBeUpdated());
-  // }
+
+  async updateIndex(_force = false) {
+    return this.#recursiveUpdateFolder(this.folderPath);
+  }
+
+  async #recursiveUpdateFolder(_curPath) {
+    const This = this;
+
+    let curFolder = this.index.getFolderFromPath(_curPath);
+    if (curFolder.needsUpdate) 
+    {
+      curFolder.contents = [];
+      curFolder.needsUpdate = false;
+      await updateIndexOnPath(_curPath, MaxDepth);
+      return;
+    }
+    for (let item in curFolder.contents)
+    {
+      let newPath = _curPath + '/' + item;
+      await this.#recursiveUpdateFolder(newPath);
+    }
+
+    async function updateIndexOnPath(_folder, _depth) {
+      if (_depth < 0) return;
+      let fileObjs = await This.#readDir(_folder);
+      let promises = [];
+      for (let fileObj of fileObjs)
+      {
+        if (fileObj.isFolder) // Directory
+        {
+          promises.push(updateIndexOnPath(_folder + '/' + fileObj.name, _depth - 1));
+          continue;
+        }
+        This.index.addFile(_folder + '/' + fileObj.name, fileObj.size);
+      }
+      await Promise.all(promises);
+    }
+  }
 
   // listFoldersToBeUpdated() {
   //   return this.#listFoldersToBeUpdated(this.folderPath);
@@ -125,22 +132,6 @@ class FolderIndexer {
   // }
 
 
-  // async #recursiveUpdateFolder(_curPath) {
-  //   let curFolder = this.#getFolderFromPath(_curPath);
-  //   if (curFolder.needsUpdate) 
-  //   {
-  //       let newFolder = await this.#generateFileMap(_curPath, MaxDepth);
-  //       curFolder.contents = newFolder.contents;
-  //       curFolder.needsUpdate = false;
-  //       console.log('updating folder:', _curPath);
-  //       return;
-  //   }
-  //   for (let item in curFolder.contents)
-  //   {
-  //     let newPath = _curPath + '/' + item;
-  //     this.#recursiveUpdateFolder(newPath);
-  //   }
-  // }
 
 
   // async generateFileMap() {

@@ -37,18 +37,20 @@ let phantomDataMap = [{}];
 async function sync() {
     let trackers = FileIndexer.folderTrackers;
     await Promise.all(trackers.map(r => syncFolder(r)));
-
-    // if (!foldersToBeUpdated.length) return;
-    // await FileIndexer.updateIndex();
-    // setTimeout(sync, 5000);
+    setTimeout(sync, 15000);
 }
 
 
 async function syncFolder(_tracker) {
+    console.log('[Syncing folder]: Updating local index...');
+    await _tracker.updateIndex();
+    console.log('new Index:', _tracker.index.print());
+
     let differences = _tracker.index.difference(Server.index);
     console.log('diffs', differences);
 
     // Upload files
+    console.log('[Syncing folder]: Uploading local files...');
     for (let missingPath of differences.missingPaths)
     {
         let fullPath = _tracker.folderPath + '' + missingPath;
@@ -63,6 +65,7 @@ async function syncFolder(_tracker) {
     }
 
     // Remove excess files
+    console.log('[Syncing folder]: Removing excess files on server...');
     for (let missingPath of differences.extraPaths)
     {
         try {
@@ -78,7 +81,7 @@ async function syncFolder(_tracker) {
     }
 
     let postDifferences = _tracker.index.difference(Server.index);
-    if (postDifferences.missingPaths.length === 0 && postDifferences.extraPaths.length === 0) return false;
+    if (postDifferences.missingPaths.length === 0 && postDifferences.extraPaths.length === 0) return console.log('[Syncing folder]: Finished.');
     console.log('[ERROR] Error while syncing: not all things are properly uploaded:', _tracker.fullPath, postDifferences, Server.index.print());
 }
 

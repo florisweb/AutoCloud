@@ -61,7 +61,6 @@ export default class FileServer {
     return new Promise((resolve => {
       let path = this.#config.CacheFolder + '/' + this.#CachedIndexFileName;
       let data = this.index.export();
-
       fs.writeFile(path, JSON.stringify(data), (err) => {
         if (err) 
         {
@@ -79,8 +78,6 @@ export default class FileServer {
     try {
       let data = fs.readFileSync(path);
       let obj = JSON.parse(data);
-      console.log('import', obj)
-      
       if (!this.index) this.index = new FolderIndex();
       this.index.import(obj);
     } catch(e) {

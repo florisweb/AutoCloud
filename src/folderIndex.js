@@ -1,7 +1,7 @@
 
 export default class FolderIndex {
   #index = {
-    contents: [],
+    contents: {},
     needsUpdate: false,
   };
   get index() {
@@ -51,7 +51,7 @@ export default class FolderIndex {
       if (!curFolder.contents[part]) 
       {
         curFolder.contents[part] = {
-          contents: [],
+          contents: {},
           needsUpdate: false,
         }
       }

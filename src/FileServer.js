@@ -126,7 +126,7 @@ export default class FileServer {
         this.index.addFile(_remoteRelPath, stat.size);
       });
     } catch (e) {
-      console.log('! [FS] Error while uploading:', _name, e)
+      console.log('! [FS] Error while uploading:', _localPath, e)
       return false;
     }
   }

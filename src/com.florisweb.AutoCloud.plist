@@ -7,7 +7,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/node</string>
-        <string>/Library/WebServer/Documents/git/AutoCloud/script.js</string>
+        <string>/Library/WebServer/Documents/git/AutoCloud/src/script.js</string>
     </array>
     <key>RunAtLoad</key>
     <true/>

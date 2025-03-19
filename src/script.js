@@ -7,18 +7,17 @@ import { readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'url';
 
 const __dirname = getCurDir();
-
 export function getCurDir() {
     return dirname(fileURLToPath(import.meta.url));
 }
 
-const Config = JSON.parse(fs.readFileSync('./config.json'));
+const Config = JSON.parse(fs.readFileSync(__dirname + '/config.json'));
 const Server = new FileServer(Config);
 const TagManager = new tagManager();
 const FileIndexer = new fileIndexer();
 
 
-let phantomDataMap = [{}];
+
 (async () => {
     await Server.setup();
     await TagManager.setup();
@@ -37,31 +36,40 @@ let phantomDataMap = [{}];
 async function sync() {
     let trackers = FileIndexer.folderTrackers;
     await Promise.all(trackers.map(r => syncFolder(r)));
-    setTimeout(sync, 15000);
+
+    await Server.disconnect();
+    setTimeout(sync, Config.updateFrequency);
 }
 
 
 async function syncFolder(_tracker) {
-    console.log('[Syncing folder]: Updating local index...');
+    console.log('[Sync Folder]: Updating local index...');
     await _tracker.updateIndex();
-    console.log('new Index:', _tracker.index.print());
 
     let differences = _tracker.index.difference(Server.index);
+    console.log('index.local', _tracker.index.print(), 'server', Server.index.print(), 'diff', differences);
+
+    if (differences.missingPaths.length === 0 && differences.extraPaths.length === 0) return console.log('[Sync Folder]: No changes, quiting sync procedure.'); // Nothing to do
     console.log('diffs', differences);
+
+    let connected = await Server.connect();
+    if (!connected) return;
+    
 
     // Upload files
     console.log('[Syncing folder]: Uploading local files...');
+    let promises = [];
     for (let missingPath of differences.missingPaths)
     {
         let fullPath = _tracker.folderPath + '' + missingPath;
         
         if (await isFolder(fullPath)) 
         {
-            await Server.uploadFolder(fullPath, _tracker.folderPath);
+            promises.push(Server.uploadFolder(fullPath, _tracker.folderPath));
             continue;
         }
 
-        await Server.uploadFile(fullPath, _tracker.folderPath);
+        promises.push(Server.uploadFile(fullPath, _tracker.folderPath));
     }
 
     // Remove excess files
@@ -71,15 +79,18 @@ async function syncFolder(_tracker) {
         try {
             if (await Server.isFolder(missingPath))
             {
-                await Server.removeFolder(missingPath);
+                promises.push(Server.removeFolder(missingPath));
             } else {
-                await Server.removeFile(missingPath);
+                promises.push(Server.removeFile(missingPath));
             }
         } catch(e) {
             console.log('Could not remove', missingPath, e);
         }     
     }
 
+    await Promise.all(promises);
+    Server.writeCachedIndex();
+    
     let postDifferences = _tracker.index.difference(Server.index);
     if (postDifferences.missingPaths.length === 0 && postDifferences.extraPaths.length === 0) return console.log('[Syncing folder]: Finished.');
     console.log('[ERROR] Error while syncing: not all things are properly uploaded:', _tracker.fullPath, postDifferences, Server.index.print());
@@ -90,45 +101,6 @@ async function isFolder(_path) {
     let stat = fs.lstatSync(_path);
     return stat.isDirectory();
 }
-
-async function readDir(_path) {
-    return (await readdir(_path))
-        .filter(r => !FileIndexer._isPathInIgnoreFolder(_path + '/' + r))
-        .map(r => {
-            let fullPath = _path + '/' + r;
-            let stat = fs.lstatSync(fullPath);
-            return {
-                name: r,
-                fullPath: fullPath, 
-                stat: stat, 
-                isFolder: stat.isDirectory(), 
-                size: stat.size
-            }
-        });
-}
-
-
-
-// async function sync() {
-
-
-//     // let trackers = FileIndexer.folderTrackers;
-//     // for (let tracker of trackers)
-//     // {
-//     //     let foldersToBeUpdated = tracker.listFoldersToBeUpdated();
-//     //     console.log(foldersToBeUpdated);
-//     //     for (let folder of foldersToBeUpdated)
-//     //     {
-//     //         console.log('going to upload folder:', folder);
-//     //         await Server.uploadFolder(folder, tracker.folderPath);
-//     //     }
-//     // }
-
-//     // if (!foldersToBeUpdated.length) return;
-//     // await FileIndexer.updateIndex();
-//     setTimeout(sync, 5000);
-// }
-
 
 async function wait(_ms) {
     return new Promise((resolve) => setTimeout(resolve, _ms));

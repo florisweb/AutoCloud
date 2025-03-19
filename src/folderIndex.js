@@ -13,8 +13,14 @@ export default class FolderIndex {
     this.#basePath = _basePath;
   }
   import({index, basePath}) {
-    this.#index = _index;
+    this.#index = index;
     this.#basePath = basePath;
+  }
+  export() {
+    return {
+      index: this.#index,
+      basePath: this.#basePath
+    }
   }
 
 

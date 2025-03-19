@@ -6,13 +6,16 @@ import FolderIndex from './folderIndex.js';
 
 
 export default class FileServer {
+  #CachedIndexFileName = 'AutoCloud_remoteCache.json';
+
   client;
   #config = {};
   #isSetup = false;
   index;
 
+  #connected = false;
   get isConnected() {
-    return this.#isSetup;
+    return this.#isSetup && this.#connected;
   }
 
   constructor(_config) {
@@ -21,22 +24,70 @@ export default class FileServer {
   }
 
   async setup() {
-    console.log(`Connecting to ${this.#config.server.host}:${this.#config.server.port}`);
+    if (await this.#readCachedIndex()) return this.#isSetup = true;
+    if (!(await this.connect())) return;
+    this.#isSetup = true;
+    this.index = await this.generateIndex();
+    await this.disconnect();
+  }
+
+  async connect() {
+    if (this.#connected) return;
     try {
+      console.log('Connecting...');
       await this.client.connect(this.#config.server);
     } catch (err) {
       console.log('Failed to connect:', err);
-      return;
+      this.#connected = false;
+      await wait(15000);
+      return await this.connect();
     }
-    this.#isSetup = true;
-    this.index = await this.generateIndex();
+    console.log('Connected');
+    this.#connected = true;
+    return true;
   }
 
-  async stop() {
+  async disconnect() {
+    if (!this.#connected) return;
+    this.#connected = false;
+    console.log('Disconnected');
     return await this.client.end();
   }
   async listRootFiles() {
     return await this.client.list(this.#config.server.remoteFolder);
+  }
+
+  async writeCachedIndex() {
+    return new Promise((resolve => {
+      let path = this.#config.CacheFolder + '/' + this.#CachedIndexFileName;
+      let data = this.index.export();
+
+      fs.writeFile(path, JSON.stringify(data), (err) => {
+        if (err) 
+        {
+          console.log('error while writing', err);
+          resolve(false);
+        } return resolve(true);
+      })
+
+    }));
+  }
+
+  async #readCachedIndex() {
+    let path = this.#config.CacheFolder + '/' + this.#CachedIndexFileName;
+    if (!fs.existsSync(path)) return false;
+    try {
+      let data = fs.readFileSync(path);
+      let obj = JSON.parse(data);
+      console.log('import', obj)
+      
+      if (!this.index) this.index = new FolderIndex();
+      this.index.import(obj);
+    } catch(e) {
+      console.log('error', e);
+      return false;
+    }
+    return true;
   }
 
   async uploadFolder(_name, _watchedFolder = false) {
@@ -57,7 +108,7 @@ export default class FileServer {
     }
   }
 
-   async #readLocalDir(_path) {
+  async #readLocalDir(_path) {
      return (await readdir(_path))
       // .filter(r => !this.#parent._isPathInIgnoreFolder(_path + '/' + r)) // TODO
       .map(r => {
@@ -167,4 +218,9 @@ export default class FileServer {
     await generateIndex(this.#config.server.remoteFolder, this.#config.MaxDepth);
     return map;
   }
+}
+
+
+async function wait(_ms) {
+    return new Promise((resolve) => setTimeout(resolve, _ms));
 }

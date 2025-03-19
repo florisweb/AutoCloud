@@ -8,10 +8,13 @@ import FolderIndex from './folderIndex.js';
 export default class FileServer {
   #CachedIndexFileName = 'AutoCloud_remoteCache.json';
 
+  #folderManagers = [];
   client;
-  #config = {};
+  config = {};
   #isSetup = false;
   index;
+
+
 
   #connected = false;
   get isConnected() {
@@ -19,7 +22,7 @@ export default class FileServer {
   }
 
   constructor(_config) {
-    this.#config = _config;
+    this.config = _config;
     this.client = new Client();
   }
 
@@ -35,7 +38,7 @@ export default class FileServer {
     if (this.#connected) return;
     try {
       console.log('Connecting...');
-      await this.client.connect(this.#config.server);
+      await this.client.connect(this.config.server);
     } catch (err) {
       console.log('Failed to connect:', err);
       this.#connected = false;
@@ -53,13 +56,10 @@ export default class FileServer {
     console.log('Disconnected');
     return await this.client.end();
   }
-  async listRootFiles() {
-    return await this.client.list(this.#config.server.remoteFolder);
-  }
 
   async writeCachedIndex() {
     return new Promise((resolve => {
-      let path = this.#config.CacheFolder + '/' + this.#CachedIndexFileName;
+      let path = this.config.CacheFolder + '/' + this.#CachedIndexFileName;
       let data = this.index.export();
       fs.writeFile(path, JSON.stringify(data), (err) => {
         if (err) 
@@ -73,7 +73,7 @@ export default class FileServer {
   }
 
   async #readCachedIndex() {
-    let path = this.#config.CacheFolder + '/' + this.#CachedIndexFileName;
+    let path = this.config.CacheFolder + '/' + this.#CachedIndexFileName;
     if (!fs.existsSync(path)) return false;
     try {
       let data = fs.readFileSync(path);
@@ -87,23 +87,12 @@ export default class FileServer {
     return true;
   }
 
-  async uploadFolder(_name, _watchedFolder = false) {
-    let fullPath = _name.split(_watchedFolder).length > 0 ? _name : _watchedFolder + '/' + _name;
-    if (!fs.existsSync(fullPath)) return console.log('Error, source file does not exist:', _name);
-    console.log('[FS] upload folder:', fullPath);
 
-    let contents = await this.#readLocalDir(fullPath);
-    for (let item of contents)
-    {
-      if (!item.isFolder)
-      {
-        await this.uploadFile(fullPath + '/' + item.name, _watchedFolder);
-        continue;
-      } else {
-        await this.uploadFolder(fullPath + '/' + item.name, _watchedFolder)
-      }
-    }
+  setFolderTrackers(_localTrackers) {
+    this.#folderManagers = _localTrackers.map(r => new RemoteFolderManager(r, this));
   }
+
+
 
   async #readLocalDir(_path) {
      return (await readdir(_path))
@@ -120,25 +109,21 @@ export default class FileServer {
       }
     );
   }
-  
 
 
-  async uploadFile(_name, _watchedFolder = false) {
-    let fullPath = _name.split(_watchedFolder).length > 0 ? _name : _watchedFolder + '/' + _name;
-    let localName = _name.split(_watchedFolder).length > 1 ? _name.split(_watchedFolder)[1] : _name;
-    if (!fs.existsSync(fullPath)) return console.log('Error, source file does not exist:', _name);
-    console.log('[FS] upload file:', fullPath);
-    let targetPath = this.#config.server.remoteFolder + '/' + localName;
-    let parts = targetPath.split('/');
-    let pathPath = parts.splice(0, parts.length - 1).join('/');
-    let stat = fs.lstatSync(fullPath);
-    
+
+  async uploadFile(_localPath, _remoteRelPath) {
+    if (!fs.existsSync(_localPath)) return console.log('Error, source file does not exist:', _localPath);
+    console.log('[FS] uploading file:', _localPath);
+    let remoteAbsPath = this.config.server.remoteFolder + '/' + _remoteRelPath;
+    let parts = remoteAbsPath.split('/');
+    let remoteContainingFolder = parts.splice(0, parts.length - 1).join('/');
     try {
-      let exists = await this.client.exists(pathPath);
-      if (!exists) await this.client.mkdir(pathPath, true);
-      return this.client.put(fullPath, targetPath).then(() => {
+      await this.#createFolderIfAbsent(remoteContainingFolder);
+      let stat = fs.lstatSync(_localPath);
+      return this.client.put(_localPath, remoteAbsPath).then(() => {
         // Success: update index
-        this.index.addFile(localName, stat.size);
+        this.index.addFile(_remoteRelPath, stat.size);
       });
     } catch (e) {
       console.log('! [FS] Error while uploading:', _name, e)
@@ -146,45 +131,45 @@ export default class FileServer {
     }
   }
 
-  async renameOrMove(_fromPath, _toPath) {
-    let remoteFromPath = this.#config.server.remoteFolder + '/' + _fromPath;
-    let remoteToPath = this.#config.server.remoteFolder + '/' + _toPath;
-    
-    let parts = remoteToPath.split('/');
-    let pathPath = parts.splice(0, parts.length - 1).join('/');
-    
-    let exists = await this.client.exists(pathPath);
-    if (!exists) await this.client.mkdir(pathPath, true);
-    return await this.client.rename(remoteFromPath, remoteToPath);
+  async #createFolderIfAbsent(_remoteAbsPath) {
+    let exists = await this.client.exists(_remoteAbsPath);
+    if (!exists) await this.client.mkdir(_remoteAbsPath, true);
   }
 
 
+  async uploadFolder(_localPath, _remoteRelPath) {
+    if (!fs.existsSync(_localPath)) return console.log('Error, source file does not exist:', _localPath);
+    console.log('[FS] uploading folder:', _localPath);
+    let remoteAbsPath = this.config.server.remoteFolder + '/' + _remoteRelPath;
 
-  async isFolder(_name) {
-    let parts = _name.split('/');
-    let sanitizedPath = parts.filter(r => !!r).join('/');
-    let targetPath = this.#config.server.remoteFolder + '/' + sanitizedPath;
-    let stat = await this.client.stat(targetPath);
-    return stat.isDirectory;
+    let contents = await this.#readLocalDir(_localPath);
+    for (let item of contents)
+    {
+      if (!item.isFolder)
+      {
+        await this.uploadFile(_localPath + '/' + item.name, _remoteRelPath + '/' + item.name);
+        continue;
+      } else {
+        await this.uploadFolder(_localPath + '/' + item.name, _remoteRelPath + '/' + item.name);
+      }
+    }
   }
 
-  async removeFile(_name) {
-    let parts = _name.split('/');
-    let sanitizedPath = parts.filter(r => !!r).join('/');
-    let targetPath = this.#config.server.remoteFolder + '/' + sanitizedPath;
-    
-    return this.client.delete(targetPath).then(() => {
-      this.index.removePath(sanitizedPath);
+
+  async removeFile(_remoteRelPath) {
+    let remoteAbsPath = this.config.server.remoteFolder + '/' + _remoteRelPath;
+    console.log('[FS] remove file:', _remoteRelPath);
+    return this.client.delete(remoteAbsPath).then(() => {
+      this.index.removePath(_remoteRelPath);
     });
   }
 
-  async removeFolder(_name) {
-    let parts = _name.split('/');
-    let sanitizedPath = parts.filter(r => !!r).join('/');
-    let targetPath = this.#config.server.remoteFolder + '/' + sanitizedPath;
-    
-    return this.client.rmdir(targetPath, true).then(() => {
-      this.index.removePath(sanitizedPath);
+
+  async removeFolder(_remoteRelPath) {
+    let remoteAbsPath = this.config.server.remoteFolder + '/' + _remoteRelPath;
+    console.log('[FS] remove folder:', _remoteRelPath);
+    return this.client.rmdir(remoteAbsPath, true).then(() => {
+      this.index.removePath(_remoteRelPath);
     });
   }
 
@@ -192,7 +177,7 @@ export default class FileServer {
 
 
   async generateIndex() { 
-    let map = new FolderIndex(this.#config.server.remoteFolder);
+    let map = new FolderIndex(this.config.server.remoteFolder);
     let This = this;
 
     async function generateIndex(_folder, _depth) {
@@ -212,10 +197,70 @@ export default class FileServer {
       await Promise.all(promises);
     }
 
-    await generateIndex(this.#config.server.remoteFolder, this.#config.MaxDepth);
+    await generateIndex(this.config.server.remoteFolder, this.config.MaxDepth);
     return map;
   }
 }
+
+
+
+
+
+
+
+class RemoteFolderManager {
+  #localTracker;
+  #server;
+
+  get remoteRelPath() {
+    return this.#localTracker.remotePath;
+  }
+
+  constructor(_localTracker, _parent) {
+    this.#server = _parent;
+    this.#localTracker = _localTracker;
+    this.#localTracker.server = this;
+  }
+
+
+  async isFolder(_path) {
+    let targetPath = this.#server.config.server.remoteFolder + '/' + this.remoteRelPath + '/' + this.#sanatizePath(_path);
+    let stat = await this.#server.client.stat(targetPath);
+    return stat.isDirectory;
+  }
+
+  async uploadFile(_relativePath) {
+    let fullPath = _relativePath.split(this.#localTracker.folderPath).length > 1 ? _relativePath : this.#localTracker.folderPath + '/' + _relativePath;
+    let localPath = fullPath.split(this.#localTracker.folderPath)[1];
+    return this.#server.uploadFile(fullPath, this.remoteRelPath + '/' + localPath);
+  }
+
+  async uploadFolder(_relativePath) {
+    let fullPath = _relativePath.split(this.#localTracker.folderPath).length > 1 ? _relativePath : this.#localTracker.folderPath + '/' + _relativePath;
+    let localPath = fullPath.split(this.#localTracker.folderPath)[1];
+    return this.#server.uploadFolder(fullPath, this.remoteRelPath + '/' + localPath);
+  }
+
+  async removeFile(_relativePath) {
+    let localPath = _relativePath.split(this.#localTracker.folderPath).length > 1 ? _relativePath.split(this.#localTracker.folderPath)[1] : _relativePath;
+    return this.#server.removeFile(this.remoteRelPath + '/' + localPath);
+  }
+
+  async removeFolder(_relativePath) {
+    let localPath = _relativePath.split(this.#localTracker.folderPath).length > 1 ? _relativePath.split(this.#localTracker.folderPath)[1] : _relativePath;
+    return this.#server.removeFolder(this.remoteRelPath + '/' + localPath);
+  }
+
+
+  #sanatizePath(_path) {
+    return _path.split('/').filter(r => !!r).join('/');
+  }
+}
+
+
+
+
+
 
 
 async function wait(_ms) {

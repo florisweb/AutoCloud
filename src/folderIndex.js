@@ -32,6 +32,7 @@ export default class FolderIndex {
   }
 
   addFile(_path, _size) { // Path obj
+    if (_path.includes('.DS_Store')) return; // Filter out
     let localPath = this.#pathToLocalPath(_path);
     let parts = localPath.split('/').filter(p => !!p);
     let fileName = Object.assign([], parts).pop();
@@ -76,7 +77,7 @@ export default class FolderIndex {
     return true;
   }
 
-  difference(_folderIndex, _changedPerspective = false) {
+  difference(_folderIndex, _ownOffset, _changedPerspective = false) {
     let missingPaths = [];
 
     function recursiveLoop(_indexA, _indexB, _curPath = '') {
@@ -105,12 +106,22 @@ export default class FolderIndex {
       }
     }
 
-    recursiveLoop(this.#index, _folderIndex.index);
+    let ownStartFolder = this.#index;
+    let otherStartFolder = _folderIndex.index;
+    if (_ownOffset) 
+    {
+      if (_changedPerspective)
+      {
+        ownStartFolder = this.getFolderFromPath(_ownOffset) || {contents: {}, needsUpdate: false};
+      } else otherStartFolder = _folderIndex.getFolderFromPath(_ownOffset) || {contents: {}, needsUpdate: false};
+    }
+
+    recursiveLoop(ownStartFolder, otherStartFolder);
     
     if (_changedPerspective) return missingPaths;
     return {
       missingPaths: missingPaths,
-      extraPaths: _folderIndex.difference(this, true)
+      extraPaths: _folderIndex.difference(this, _ownOffset, true)
     }
   }
 

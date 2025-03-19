@@ -4,9 +4,14 @@ export default class tagManager {
     #SyncTagName = 'AutoCloud.sync'; // Labels folder to be synced
     #NoSyncTagName = 'AutoCloud.noSync'; // Labels folder to be excluded from sync
  
+    get synedFolderSets() {
+        return this.foldersToIgnore.map()
+
+    }
 
     foldersToSync = [];
     foldersToIgnore = [];
+
     async setup() {
         this.foldersToSync = await this.#getFilesWithTag(this.#SyncTagName);
         this.foldersToIgnore = await this.#getFilesWithTag(this.#NoSyncTagName);

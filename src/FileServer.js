@@ -21,6 +21,10 @@ export default class FileServer {
     return this.#isSetup && this.#connected;
   }
 
+  get folderManagers() {
+    return this.#folderManagers;
+  }
+
   constructor(_config) {
     this.config = _config;
     this.client = new Client();
@@ -34,8 +38,13 @@ export default class FileServer {
     await this.disconnect();
   }
 
+  setFolderTrackers(_localTrackers) {
+    this.#folderManagers = _localTrackers.map(r => new RemoteFolderManager(r, this));
+  }
+
+
   async connect() {
-    if (this.#connected) return;
+    if (this.#connected) return true;
     try {
       console.log('Connecting...');
       await this.client.connect(this.config.server);
@@ -57,6 +66,17 @@ export default class FileServer {
     return await this.client.end();
   }
 
+  async uploadCurState(_curState) {
+    let contents = Buffer.from(JSON.stringify(_curState), 'utf-8');
+    let remoteAbsPath = this.config.server.remoteFolder + '/curState.json';
+
+    try {
+      return await this.client.put(contents, remoteAbsPath);
+    } catch (e) {
+      console.log('! [FS] Error while uploading:', contents, remoteAbsPath, e);
+    }
+  }
+
   async writeCachedIndex() {
     return new Promise((resolve => {
       let path = this.config.CacheFolder + '/' + this.#CachedIndexFileName;
@@ -68,7 +88,6 @@ export default class FileServer {
           resolve(false);
         } return resolve(true);
       })
-
     }));
   }
 
@@ -87,10 +106,6 @@ export default class FileServer {
     return true;
   }
 
-
-  setFolderTrackers(_localTrackers) {
-    this.#folderManagers = _localTrackers.map(r => new RemoteFolderManager(r, this));
-  }
 
 
 
@@ -114,7 +129,7 @@ export default class FileServer {
 
   async uploadFile(_localPath, _remoteRelPath) {
     if (!fs.existsSync(_localPath)) return console.log('Error, source file does not exist:', _localPath);
-    console.log('[FS] uploading file:', _localPath);
+    console.log('[FS] uploading file:', _localPath, _remoteRelPath);
     let remoteAbsPath = this.config.server.remoteFolder + '/' + _remoteRelPath;
     let parts = remoteAbsPath.split('/');
     let remoteContainingFolder = parts.splice(0, parts.length - 1).join('/');
@@ -132,7 +147,9 @@ export default class FileServer {
   }
 
   async #createFolderIfAbsent(_remoteAbsPath) {
+    console.log('create folder?', _remoteAbsPath);
     let exists = await this.client.exists(_remoteAbsPath);
+    console.log('post');
     if (!exists) await this.client.mkdir(_remoteAbsPath, true);
   }
 
@@ -211,6 +228,9 @@ export default class FileServer {
 class RemoteFolderManager {
   #localTracker;
   #server;
+  get localPath() {
+    return this.#localTracker.folderPath;
+  }
 
   get remoteRelPath() {
     return this.#localTracker.remotePath;

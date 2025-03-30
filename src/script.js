@@ -29,15 +29,32 @@ const AutoCloud = new class {
         this.sync();
     }
 
-
+    #lastChange = new Date();
     async sync() {
         let trackers = FileIndexer.folderTrackers;
         await Promise.all(trackers.map(r => this.syncFolder(r)));
-
-        await Server.disconnect();
         setTimeout(() => this.sync(), Config.updateFrequency);
-    }
 
+
+        if (Server.isConnected) // The server is only connected if there were any changes
+        {
+            this.#lastChange = new Date();
+        } else {
+            let connected = await Server.connect();
+            if (!connected) return;
+        }
+
+        let curState = {
+          lastSync: new Date().getTime(),
+          lastChange: this.#lastChange.getTime(),
+          syncFrequency: Config.updateFrequency,
+          trackedFolders: Server.folderManagers.map(r => {return {clientPath: r.localPath, serverPath: r.remoteRelPath}})
+        }
+        console.log('[AutoCloud]: Syncing curState.json');
+        await Server.uploadCurState(curState);
+       
+        await Server.disconnect();
+    }
 
     async syncFolder(_tracker) {
         console.log('[Sync Folder]: Updating local index...');
@@ -49,7 +66,6 @@ const AutoCloud = new class {
 
         let connected = await Server.connect();
         if (!connected) return;
-        
 
         // Upload files
         console.log('[Syncing folder]: Uploading local files...');
@@ -81,6 +97,14 @@ const AutoCloud = new class {
                 console.log('Could not remove', extraPath, e);
             }     
         }
+        let curState = {
+          lastSync: new Date().getTime(),
+          lastChange: this.#lastChange.getTime(),
+          syncFrequency: Config.updateFrequency,
+          trackedFolders: Server.folderManagers.map(r => {return {clientPath: r.localPath, serverPath: r.remoteRelPath}})
+        }
+        console.log('Syncing: cur state', curState);
+        Server.uploadCurState(curState);
 
         await Promise.all(promises);
         Server.writeCachedIndex();
